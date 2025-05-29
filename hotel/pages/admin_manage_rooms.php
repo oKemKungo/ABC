@@ -13,34 +13,46 @@ function handleAdminManageRooms($conn) {
     // --- ส่วนประมวลผลการเพิ่มห้องพักใหม่ (POST request) ---
     if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['add_room'])) {
         $room_type = trim($_POST['room_type'] ?? '');
+        $room_number = trim($_POST['room_number'] ?? ''); // <--- เพิ่ม: รับค่าหมายเลขห้อง
         $description = trim($_POST['description'] ?? '');
         $price_per_night = (float)($_POST['price_per_night'] ?? 0);
         $capacity = (int)($_POST['capacity'] ?? 1);
         $image_url = trim($_POST['image_url'] ?? '');
         $is_available = isset($_POST['is_available']) ? 1 : 0; // checkbox
 
-        if (empty($room_type) || empty($description) || $price_per_night <= 0 || $capacity <= 0) {
+        // เพิ่มการตรวจสอบ room_number ว่าว่างเปล่าหรือไม่
+        if (empty($room_type) || empty($room_number) || empty($description) || $price_per_night <= 0 || $capacity <= 0) {
             $message = "<p style='color: red;'>กรุณากรอกข้อมูลให้ครบถ้วนและถูกต้องสำหรับการเพิ่มห้องพัก</p>";
         } else {
-            // ตรวจสอบว่ามี room_type ซ้ำหรือไม่ (อาจจะไม่จำเป็น 100% แต่ช่วยป้องกันความซ้ำซ้อน)
-            $stmt = $conn->prepare("SELECT room_id FROM rooms WHERE room_type = ?");
-            $stmt->bind_param("s", $room_type);
-            $stmt->execute();
-            $stmt->store_result();
-
-            if ($stmt->num_rows > 0) {
-                $message = "<p style='color: red;'>ไม่สามารถเพิ่มห้องพักได้: ประเภทห้องนี้มีอยู่แล้ว</p>";
+            // ตรวจสอบว่ามี room_number ซ้ำหรือไม่ (ซึ่งเป็นสาเหตุของ 'Duplicate entry' error)
+            $stmt = $conn->prepare("SELECT room_id FROM rooms WHERE room_number = ?");
+            if ($stmt === false) {
+                $message = "<p style='color: red;'>เกิดข้อผิดพลาดในการเตรียมคำสั่ง SQL ตรวจสอบ room_number: " . $conn->error . "</p>";
             } else {
-                $stmt = $conn->prepare("INSERT INTO rooms (room_type, description, price_per_night, capacity, image_url, is_available) VALUES (?, ?, ?, ?, ?, ?)");
-                $stmt->bind_param("ssdiss", $room_type, $description, $price_per_night, $capacity, $image_url, $is_available);
+                $stmt->bind_param("s", $room_number);
+                $stmt->execute();
+                $stmt->store_result();
 
-                if ($stmt->execute()) {
-                    $message = "<p style='color: green;'>เพิ่มห้องพักใหม่สำเร็จ!</p>";
+                if ($stmt->num_rows > 0) {
+                    $message = "<p style='color: red;'>ไม่สามารถเพิ่มห้องพักได้: หมายเลขห้อง <b>" . htmlspecialchars($room_number) . "</b> นี้มีอยู่ในระบบแล้ว</p>";
                 } else {
-                    $message = "<p style='color: red;'>เกิดข้อผิดพลาดในการเพิ่มห้องพัก: " . $stmt->error . "</p>";
+                    // คำสั่ง INSERT ใหม่ พร้อม room_number
+                    $stmt = $conn->prepare("INSERT INTO rooms (room_type, room_number, description, price_per_night, capacity, image_url, is_available) VALUES (?, ?, ?, ?, ?, ?, ?)");
+                    if ($stmt === false) {
+                        $message = "<p style='color: red;'>เกิดข้อผิดพลาดในการเตรียมคำสั่ง SQL เพิ่มห้องพัก: " . $conn->error . "</p>";
+                    } else {
+                        // "ssdissi" -> s (room_type), s (room_number), d (description), i (price), i (capacity), s (image_url), i (is_available)
+                        $stmt->bind_param("ssdissi", $room_type, $room_number, $description, $price_per_night, $capacity, $image_url, $is_available);
+
+                        if ($stmt->execute()) {
+                            $message = "<p style='color: green;'>เพิ่มห้องพักใหม่สำเร็จ!</p>";
+                        } else {
+                            $message = "<p style='color: red;'>เกิดข้อผิดพลาดในการเพิ่มห้องพัก: " . $stmt->error . "</p>";
+                        }
+                    }
                 }
+                $stmt->close();
             }
-            $stmt->close();
         }
     }
 
@@ -50,13 +62,17 @@ function handleAdminManageRooms($conn) {
 
         if ($room_id_to_delete > 0) {
             $stmt = $conn->prepare("DELETE FROM rooms WHERE room_id = ?");
-            $stmt->bind_param("i", $room_id_to_delete);
-            if ($stmt->execute()) {
-                $message = "<p style='color: green;'>ลบห้องพักสำเร็จ!</p>";
+            if ($stmt === false) {
+                $message = "<p style='color: red;'>เกิดข้อผิดพลาดในการเตรียมคำสั่ง SQL ลบห้องพัก: " . $conn->error . "</p>";
             } else {
-                $message = "<p style='color: red;'>เกิดข้อผิดพลาดในการลบห้องพัก: " . $stmt->error . "</p>";
+                $stmt->bind_param("i", $room_id_to_delete);
+                if ($stmt->execute()) {
+                    $message = "<p style='color: green;'>ลบห้องพักสำเร็จ!</p>";
+                } else {
+                    $message = "<p style='color: red;'>เกิดข้อผิดพลาดในการลบห้องพัก: " . $stmt->error . "</p>";
+                }
+                $stmt->close();
             }
-            $stmt->close();
         } else {
             $message = "<p style='color: red;'>ไม่พบ ID ห้องพักที่ต้องการลบ</p>";
         }
@@ -75,6 +91,8 @@ function handleAdminManageRooms($conn) {
             <input type="hidden" name="add_room" value="1">
             <label for="room_type">ประเภทห้อง:</label>
             <input type="text" id="room_type" name="room_type" required>
+
+            <label for="room_number">หมายเลขห้อง:</label> <input type="text" id="room_number" name="room_number" required>
 
             <label for="description">รายละเอียด:</label>
             <textarea id="description" name="description" rows="5" required></textarea>
@@ -96,11 +114,12 @@ function handleAdminManageRooms($conn) {
 
             <button type="submit">เพิ่มห้องพัก</button>
         </form>
-    HTML;
+HTML;
 
     echo "<h2>รายการห้องพักทั้งหมด</h2>";
 
-    $sql = "SELECT room_id, room_type, description, price_per_night, capacity, is_available, image_url FROM rooms";
+    // เพิ่ม room_number ใน SELECT query เพื่อนำมาแสดงในตาราง
+    $sql = "SELECT room_id, room_type, room_number, description, price_per_night, capacity, is_available, image_url FROM rooms";
     $result = $conn->query($sql);
 
     if ($result->num_rows > 0) {
@@ -109,11 +128,12 @@ function handleAdminManageRooms($conn) {
         echo "<tr>";
         echo "<th>ID</th>";
         echo "<th>ประเภทห้อง</th>";
+        echo "<th>หมายเลขห้อง</th>"; // <--- เพิ่มคอลัมน์นี้
         echo "<th>ราคา/คืน</th>";
         echo "<th>รองรับ (ท่าน)</th>";
         echo "<th>สถานะ</th>";
         echo "<th>รูปภาพ URL</th>";
-        echo "<th>การจัดการ</th>"; // เพิ่มคอลัมน์นี้
+        echo "<th>การจัดการ</th>";
         echo "</tr>";
         echo "</thead>";
         echo "<tbody>";
@@ -121,6 +141,7 @@ function handleAdminManageRooms($conn) {
             echo "<tr>";
             echo "<td>" . htmlspecialchars($row['room_id']) . "</td>";
             echo "<td>" . htmlspecialchars($row['room_type']) . "</td>";
+            echo "<td>" . htmlspecialchars($row['room_number']) . "</td>"; // <--- แสดงหมายเลขห้อง
             echo "<td>" . number_format($row['price_per_night'], 2) . "</td>";
             echo "<td>" . htmlspecialchars($row['capacity']) . "</td>";
             echo "<td>" . ($row['is_available'] ? 'พร้อมใช้งาน' : 'ไม่พร้อมใช้งาน') . "</td>";
