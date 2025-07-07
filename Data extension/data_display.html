@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>ข้อมูลชิ้นงานในโมเดล</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f4f4f4;
+            color: #333;
+        }
+        h1 {
+            color: #4CAF50;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .controls {
+            margin-bottom: 20px;
+            text-align: center;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+        .control-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        label {
+            font-weight: bold;
+            color: #555;
+        }
+        select, input[type="text"] {
+            padding: 8px;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+            margin: 0;
+            font-size: 0.9em;
+        }
+        button {
+            padding: 10px 15px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 1em;
+            margin: 0 5px;
+        }
+        button:hover { background-color: #45a049; }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+            background-color: #fff;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        th, td {
+            padding: 12px;
+            border: 1px solid #ddd;
+            text-align: left;
+        }
+        th {
+            background-color: #4CAF50;
+            color: white;
+        }
+        tr:nth-child(even) { background-color: #f9f9f9; }
+        tr:hover { background-color: #f1f1f1; }
+        #no-data-message { text-align: center; margin-top: 30px; font-size: 1.2em; color: #555; }
+
+        /* Style สำหรับช่องใส่ชื่อ Tag ใหม่ */
+        #tagInputContainer {
+            display: none;
+            text-align: center;
+            margin-top: 30px;
+            padding: 20px;
+            background-color: #fff;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        #tagInputContainer input[type="text"] {
+            padding: 10px;
+            width: 60%;
+            margin-right: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        #tagInputContainer button {
+            margin: 5px;
+        }
+        #tagInputContainer .cancel-button {
+            background-color: #f44336;
+        }
+        #tagInputContainer .cancel-button:hover {
+            background-color: #d32f2f;
+        }
+        /* Style สำหรับปุ่มลบ Tag */
+        #deleteTagButton {
+            background-color: #f44336;
+        }
+        #deleteTagButton:hover {
+            background-color: #d32f2f;
+        }
+        /* Style สำหรับคอลัมน์ "เลือกทั้งหมด" ในส่วนหัวตาราง */
+        #selectAllColumnHeader {
+            display: none;
+            text-align: center;
+        }
+        /* เพิ่มคลาสสำหรับ cell ใน body ที่จะถูกซ่อน/แสดงพร้อมกับ header */
+        .tag-select-cell {
+            text-align: center;
+        }
+        /* คลาสสำหรับซ่อนคอลัมน์ */
+        .hidden-column {
+            display: none;
+        }
+        /* จัดตำแหน่งข้อความสำหรับคอลัมน์ตัวเลข */
+        .numeric-column {
+            text-align: right;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>ข้อมูลชิ้นงานในโมเดล</h1>
+
+    <div class="controls">
+        <div class="control-group">
+            <label for="dataTypeSelector">เลือกประเภทข้อมูล:</label>
+            <select id="dataTypeSelector">
+                <option value="selection">ตาราง Group Components</option>
+                <option value="material">ตาราง Material</option>
+                <option value="tag">ตาราง Layer (Tag)</option>
+            </select>
+        </div>
+
+        <div class="control-group">
+            <label>แสดงคอลัมน์:</label>
+            <input type="checkbox" id="showAreaCheckbox" checked onchange="toggleColumnVisibility()"> <label for="showAreaCheckbox">AREA</label>
+            <input type="checkbox" id="showVolumeCheckbox" checked onchange="toggleColumnVisibility()"> <label for="showVolumeCheckbox">VOLUME</label>
+            <input type="checkbox" id="showLengthCheckbox" checked onchange="toggleColumnVisibility()"> <label for="showLengthCheckbox">LENGTH</label>
+        </div>
+        
+        <button id="createTagButton">สร้าง Tag</button>
+        <button id="deleteTagButton" style="display: none;">ลบ Tag ที่เลือก</button>
+    </div>
+
+    <table id="dataTable">
+        <thead>
+            <tr>
+                <th>ชื่อชิ้นงาน / หมวดหมู่</th>
+                <th>ประเภท</th>
+                <th id="areaHeader" class="area-column numeric-column">AREA</th>
+                <th id="volumeHeader" class="volume-column numeric-column">VOLUME</th>
+                <th id="lengthHeader" class="length-column numeric-column">LENGTH</th>
+                <th id="selectAllColumnHeader"><input type="checkbox" id="selectAllTags"> เลือกทั้งหมด</th>
+            </tr>
+        </thead>
+        <tbody>
+        </tbody>
+    </table>
+
+    <div id="no-data-message" style="display: none;">ไม่มีข้อมูลที่จะแสดง</div>
+
+    <div id="tagInputContainer">
+        <h2>ป้อนชื่อ Tag ที่ต้องการสร้าง</h2>
+        <input type="text" id="tagNameInput" placeholder="ตัวอย่าง: Tag สำหรับผนัง">
+        <button id="confirmTagButton">ยืนยัน</button>
+        <button id="cancelTagButton" class="cancel-button">ยกเลิก</button>
+    </div>
+
+<script>
+    console.log("data_display.html: Version 2025-07-03-v5 Loaded. Checkboxes for column visibility and Ruby handles units.");
+
+    const dataTypeSelector = document.getElementById('dataTypeSelector');
+    const tableBody = document.querySelector('#dataTable tbody');
+    const noDataMessage = document.getElementById('no-data-message');
+    const createTagButton = document.getElementById('createTagButton');
+
+    const tagInputContainer = document.getElementById('tagInputContainer');
+    const tagNameInput = document.getElementById('tagNameInput');
+    const confirmTagButton = document.getElementById('confirmTagButton');
+    const cancelTagButton = document.getElementById('cancelTagButton');
+    const deleteTagButton = document.getElementById('deleteTagButton');
+    const selectAllTagsCheckbox = document.getElementById('selectAllTags');
+    const selectAllColumnHeader = document.getElementById('selectAllColumnHeader');
+
+    // Checkbox elements
+    const showAreaCheckbox = document.getElementById('showAreaCheckbox');
+    const showVolumeCheckbox = document.getElementById('showVolumeCheckbox');
+    const showLengthCheckbox = document.getElementById('showLengthCheckbox');
+
+    // Headers สำหรับคอลัมน์
+    const areaHeader = document.getElementById('areaHeader');
+    const volumeHeader = document.getElementById('volumeHeader');
+    const lengthHeader = document.getElementById('lengthHeader');
+
+    let rawTableData = [];
+    // let currentUnitSymbol = ''; // ไม่ใช้แล้วเพราะ Ruby ส่งค่าพร้อมหน่วยมาให้
+
+    function requestDataFromRuby(dataType) {
+        if (window.sketchup) {
+            window.sketchup.requestData(dataType);
+        } else {
+            console.error("JS Error: SketchUp bridge not found for requestData. Cannot request data.");
+            displayData({data: [], unit_symbol: ""}); // ส่งข้อมูลเปล่าเพื่อไม่ให้เกิด Error และแสดงข้อความ "ไม่มีข้อมูล"
+        }
+    }
+
+    function displayData(payload) {
+        console.log("JS: Received payload from Ruby:", payload);
+        rawTableData = payload.data || [];
+        // currentUnitSymbol = payload.unit_symbol || ''; // ไม่ใช้แล้ว
+        
+        renderTableData();
+    }
+
+    function renderTableData() {
+        tableBody.innerHTML = '';
+        
+        selectAllTagsCheckbox.checked = false;
+
+        const isTagType = (dataTypeSelector.value === 'tag');
+
+        // เพิ่ม console.log เพื่อตรวจสอบค่า isTagType สำหรับการดีบัก
+        console.log("JS: In renderTableData. Is 'Tag' type selected?", isTagType);
+
+        // แก้ไขบรรทัดนี้: ตั้งค่า display เป็น 'table-cell' สำหรับ header
+        selectAllColumnHeader.style.display = isTagType ? 'table-cell' : 'none';
+        deleteTagButton.style.display = isTagType ? 'inline-block' : 'none';
+        // Add this line for createTagButton
+        createTagButton.style.display = isTagType ? 'inline-block' : 'none';
+
+
+        // ไม่ต้องอัปเดตชื่อหน่วยในส่วนหัวของคอลัมน์ที่นี่แล้ว เพราะ Ruby ส่งค่าพร้อมหน่วยมาให้
+        // volumeHeader.textContent = `VOLUME (${currentUnitSymbol}\u00B3)`;
+        // areaHeader.textContent = `AREA (${currentUnitSymbol}\u00B2)`;
+        // lengthHeader.textContent = `LENGTH (${currentUnitSymbol})`;
+
+        if (rawTableData.length === 0) {
+            noDataMessage.style.display = 'block';
+            document.getElementById('dataTable').style.display = 'none';
+        } else {
+            noDataMessage.style.display = 'none';
+            document.getElementById('dataTable').style.display = 'table';
+            
+            rawTableData.forEach(row => {
+                const tr = document.createElement('tr');
+                
+                tr.insertCell().textContent = row.name;
+                tr.insertCell().textContent = row.type;
+
+                // ใช้ค่าที่ Ruby ส่งมาโดยตรง ซึ่งรวมหน่วยไว้แล้ว
+                const areaCell = tr.insertCell();
+                areaCell.className = 'area-column numeric-column';
+                areaCell.textContent = row.area;
+
+                const volumeCell = tr.insertCell();
+                volumeCell.className = 'volume-column numeric-column';
+                volumeCell.textContent = row.volume;
+
+                const lengthCell = tr.insertCell();
+                lengthCell.className = 'length-column numeric-column';
+                lengthCell.textContent = row.length;
+
+                const checkboxCell = tr.insertCell();
+                checkboxCell.className = 'tag-select-cell';
+                if (isTagType) {
+                    const checkbox = document.createElement('input');
+                    checkbox.type = 'checkbox';
+                    checkbox.className = 'tag-checkbox';
+                    checkbox.dataset.tagName = row.name;
+                    checkboxCell.appendChild(checkbox);
+                } else {
+                    checkboxCell.textContent = '';
+                }
+                // แก้ไขบรรทัดนี้: ตั้งค่า display เป็น 'table-cell' สำหรับแต่ละ cell ของ checkbox
+                checkboxCell.style.display = isTagType ? 'table-cell' : 'none';
+
+                tableBody.appendChild(tr);
+            });
+        }
+        // เรียกใช้ฟังก์ชันจัดการการแสดงผลคอลัมน์หลังจาก render ข้อมูลเสร็จ
+        toggleColumnVisibility();
+    }
+
+    // ฟังก์ชันสำหรับจัดการการแสดง/ซ่อนคอลัมน์ตามสถานะของ Checkbox
+    function toggleColumnVisibility() {
+        const showArea = showAreaCheckbox.checked;
+        const showVolume = showVolumeCheckbox.checked;
+        const showLength = showLengthCheckbox.checked;
+
+        // จัดการคอลัมน์ AREA
+        areaHeader.classList.toggle('hidden-column', !showArea);
+        document.querySelectorAll('.area-column').forEach(cell => {
+            cell.classList.toggle('hidden-column', !showArea);
+        });
+
+        // จัดการคอลัมน์ VOLUME
+        volumeHeader.classList.toggle('hidden-column', !showVolume);
+        document.querySelectorAll('.volume-column').forEach(cell => {
+            cell.classList.toggle('hidden-column', !showVolume);
+        });
+
+        // จัดการคอลัมน์ LENGTH
+        lengthHeader.classList.toggle('hidden-column', !showLength);
+        document.querySelectorAll('.length-column').forEach(cell => {
+            cell.classList.toggle('hidden-column', !showLength);
+        });
+    }
+
+    function createNewTag() {
+        console.log("JS: 'สร้าง Tag' button clicked. Showing custom input for Tag name...");
+        document.getElementById('dataTable').style.display = 'none';
+        noDataMessage.style.display = 'none';
+        document.querySelector('.controls').style.display = 'none';
+        tagInputContainer.style.display = 'block';
+        tagNameInput.value = '';
+        tagNameInput.focus();
+    }
+
+    function confirmCreateTag() {
+        const tagName = tagNameInput.value.trim();
+        console.log("JS: Confirm Tag button clicked. Tag name:", tagName);
+
+        if (tagName) {
+            if (window.sketchup) {
+                console.log("JS: Sending Tag name '" + tagName + "' to Ruby...");
+                window.sketchup.createTag(tagName);
+                // ไม่ต้องเรียก hideTagInputAndShowData() ที่นี่ เพราะ Ruby จะเรียก requestDataFromRuby() ให้หลังจากดำเนินการ
+            } else {
+                console.error("JS Error: SketchUp bridge (window.sketchup) not found for createTag. Cannot create tag.");
+                alert("JS Error: ไม่สามารถเชื่อมต่อกับ SketchUp ได้.");
+                hideTagInputAndShowData(); // กรณี Error ก็กลับมาแสดงตาราง
+            }
+        } else {
+            alert("กรุณาป้อนชื่อ Tag ครับ");
+        }
+    }
+
+    function cancelCreateTag() {
+        console.log("JS: Cancel Tag button clicked.");
+        hideTagInputAndShowData();
+    }
+
+    function hideTagInputAndShowData() {
+        tagInputContainer.style.display = 'none';
+        document.querySelector('.controls').style.display = 'flex';
+        requestDataFromRuby(dataTypeSelector.value);
+    }
+
+    function deleteSelectedTags() {
+        const selectedCheckboxes = document.querySelectorAll('.tag-checkbox:checked');
+        const selectedTags = Array.from(selectedCheckboxes).map(cb => cb.dataset.tagName);
+
+        if (selectedTags.length === 0) {
+            alert("กรุณาเลือก Tag ที่ต้องการลบครับ");
+            return;
+        }
+
+        if (window.sketchup) {
+            console.log("JS: Sending selected tags for deletion to Ruby:", selectedTags);
+            window.sketchup.deleteTags(selectedTags); // Ruby จะจัดการ alert และ refresh data เอง
+        } else {
+            console.error("JS Error: SketchUp bridge not found for deleteTags. Cannot delete tags.");
+            alert("JS Error: ไม่สามารถเชื่อมต่อกับ SketchUp ได้.");
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        console.log("JS: DOMContentLoaded. Initializing dropdown and requesting data.");
+        dataTypeSelector.value = 'selection';
+        requestDataFromRuby(dataTypeSelector.value);
+        // กำหนดสถานะเริ่มต้นของ checkbox เป็น true (แสดงทั้งหมด)
+        showAreaCheckbox.checked = true;
+        showVolumeCheckbox.checked = true;
+        showLengthCheckbox.checked = true;
+        toggleColumnVisibility(); // เรียกครั้งแรกเพื่อให้แสดงผลถูกต้อง
+    });
+
+    // Event Listeners
+    dataTypeSelector.addEventListener('change', (event) => {
+        requestDataFromRuby(event.target.value);
+    });
+
+    // Event listeners สำหรับ Checkbox การแสดง/ซ่อนคอลัมน์
+    showAreaCheckbox.addEventListener('change', toggleColumnVisibility);
+    showVolumeCheckbox.addEventListener('change', toggleColumnVisibility);
+    showLengthCheckbox.addEventListener('change', toggleColumnVisibility);
+
+    createTagButton.addEventListener('click', createNewTag);
+    confirmTagButton.addEventListener('click', confirmCreateTag);
+    cancelTagButton.addEventListener('click', cancelCreateTag);
+    deleteTagButton.addEventListener('click', deleteSelectedTags);
+
+    tagNameInput.addEventListener('keypress', function(event) {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            confirmCreateTag();
+        }
+    });
+
+    selectAllTagsCheckbox.addEventListener('change', (event) => {
+        const isChecked = event.target.checked;
+        document.querySelectorAll('.tag-checkbox').forEach(checkbox => {
+            checkbox.checked = isChecked;
+        });
+    });
+
+    console.log("JS: All event listeners added.");
+
+    window.displayData = displayData;
+
+</script>
+</body>
+</html>
